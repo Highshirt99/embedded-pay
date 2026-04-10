@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Secure Checkout — EmbedPay</title>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Bricolage+Grotesque:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing:border-box; margin:0; padding:0 }
+    :root {
+      --bg:#f5f2ee; --card:#fff; --border:#e2ddd7;
+      --text:#1a1714; --soft:#8a7f74; --muted:#b5aca3;
+      --green:#1a7a4a; --green-bg:#edf7f1;
+      --red:#c0392b;   --red-bg:#fdf2f0;
+      --mono:'IBM Plex Mono',monospace;
+      --sans:'Bricolage Grotesque',system-ui,sans-serif;
+    }
+    body { font-family:var(--sans); background:var(--bg); color:var(--text); min-height:100vh; display:flex; flex-direction:column }
+
+    .demo-bar { background:#fffbeb; border-bottom:1px solid #f0e8c8; padding:9px; text-align:center; font-size:12px; color:#92620a; font-family:var(--mono) }
+
+    header { display:flex; align-items:center; justify-content:space-between; padding:18px 32px; background:var(--card); border-bottom:1px solid var(--border) }
+    .brand { display:flex; align-items:center; gap:10px; font-weight:600; font-size:15px }
+    .brand-mark { width:28px; height:28px; background:var(--text); border-radius:6px; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:700 }
+    .secure-tag { font-size:12px; color:var(--muted); font-family:var(--mono); display:flex; align-items:center; gap:5px }
+
+    main { flex:1; display:flex; justify-content:center; align-items:flex-start; padding:44px 20px 80px }
+
+    .card { width:100%; max-width:460px; background:var(--card); border:1px solid var(--border); border-radius:16px; overflow:hidden; box-shadow:0 4px 32px rgba(0,0,0,.07) }
+
+    /* ── ORDER SUMMARY (dark top) ── */
+    .summary { background:#1a1714; color:#f5f2ee; padding:28px 32px }
+    .merchant-row { display:flex; align-items:center; gap:14px; padding-bottom:20px; border-bottom:1px solid rgba(255,255,255,.1); margin-bottom:20px }
+    .avatar { width:44px; height:44px; border-radius:10px; background:rgba(255,255,255,.12); display:flex; align-items:center; justify-content:center; font-size:20px; overflow:hidden; flex-shrink:0 }
+    .avatar img { width:100%; height:100%; object-fit:cover }
+    .m-name { font-size:15px; font-weight:600; color:#f5f2ee }
+    .m-ref  { font-size:11px; font-family:var(--mono); color:rgba(245,242,238,.4); margin-top:2px }
+
+    .amount-block { text-align:center }
+    .amt-label { font-size:11px; text-transform:uppercase; letter-spacing:.1em; color:rgba(245,242,238,.4); font-family:var(--mono); margin-bottom:8px }
+    .amt-figure { font-size:46px; font-weight:700; letter-spacing:-0.03em; color:#f5f2ee; line-height:1 }
+    .amt-sym { font-size:20px; font-weight:400; vertical-align:super; margin-right:1px }
+    .amt-desc { margin-top:10px; font-size:12px; font-family:var(--mono); color:rgba(245,242,238,.45) }
+
+    /* ── CART BREAKDOWN (collapsible) ── */
+    .breakdown-toggle { display:flex; align-items:center; justify-content:center; gap:6px; margin-top:16px; font-size:12px; font-family:var(--mono); color:rgba(245,242,238,.4); cursor:pointer; padding:6px; border-radius:4px; transition:color .15s; background:none; border:none; width:100% }
+    .breakdown-toggle:hover { color:rgba(245,242,238,.7) }
+    .breakdown-toggle .arrow { transition:transform .2s; display:inline-block }
+    .breakdown-toggle.open .arrow { transform:rotate(180deg) }
+
+    .breakdown { overflow:hidden; max-height:0; transition:max-height .35s cubic-bezier(.2,.8,.2,1) }
+    .breakdown.open { max-height:500px }
+    .breakdown-inner { padding-top:14px; border-top:1px solid rgba(255,255,255,.08); margin-top:14px }
+    .b-item { display:flex; justify-content:space-between; align-items:center; font-size:12px; padding:5px 0; color:rgba(245,242,238,.65) }
+    .b-item-name { font-family:var(--mono) }
+    .b-item-detail { font-family:var(--mono); font-size:11px; color:rgba(245,242,238,.4); margin-top:1px }
+    .b-item-price { font-family:var(--mono); color:rgba(245,242,238,.8) }
+    .b-sep { border:none; border-top:1px solid rgba(255,255,255,.08); margin:8px 0 }
+    .b-fee-row { display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:rgba(245,242,238,.45); padding:3px 0 }
+
+    /* ── FORM AREA ── */
+    .form-area { padding:24px 32px 30px }
+
+    .timer-row { display:flex; align-items:center; justify-content:center; gap:7px; font-size:12px; font-family:var(--mono); color:var(--muted); margin-bottom:20px }
+    .tdot { width:7px; height:7px; border-radius:50%; background:#1a7a4a; animation:blink 2s ease-in-out infinite }
+    .tdot.warn { background:#d08020 }
+    .tdot.dead { background:var(--red); animation:none }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.25} }
+
+    .field-label-section { font-size:11px; text-transform:uppercase; letter-spacing:.08em; color:var(--muted); font-family:var(--mono); margin-bottom:13px }
+    .fg { margin-bottom:13px; position:relative }
+    .fl { display:block; font-size:12px; font-weight:500; color:var(--soft); margin-bottom:5px }
+    .fi { width:100%; padding:11px 13px; border:1.5px solid var(--border); border-radius:8px; font-family:var(--sans); font-size:14px; color:var(--text); background:#faf9f7; outline:none; transition:border-color .15s,background .15s }
+    .fi:focus { border-color:var(--text); background:#fff }
+    .fi::placeholder { color:var(--muted) }
+    .fi.err { border-color:var(--red) }
+    .ferr { font-size:11px; color:var(--red); margin-top:4px; display:none }
+    .fi.err ~ .ferr { display:block }
+    .frow { display:grid; grid-template-columns:1fr 1fr; gap:12px }
+    .card-icons { position:absolute; right:11px; top:50%; transform:translateY(-50%); display:flex; gap:4px }
+    .ci { width:30px; height:20px; border-radius:3px; font-size:9px; font-weight:800; display:flex; align-items:center; justify-content:center }
+    .ci-v { background:#1a1f71; color:#fff }
+    .ci-m { background:#eb001b; color:#fff }
+
+    hr.sep { border:none; border-top:1px solid var(--border); margin:16px 0 }
+
+    .order-meta { background:#f7f5f2; border:1px solid var(--border); border-radius:8px; padding:13px; margin-bottom:16px }
+    .mr { display:flex; justify-content:space-between; padding:3px 0; font-size:12px }
+    .mk { color:var(--muted); font-family:var(--mono) }
+    .mv { color:var(--soft); font-family:var(--mono); font-size:11px; max-width:230px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+
+    .btn-pay { width:100%; padding:15px; background:var(--text); color:#f5f2ee; border:none; border-radius:10px; font-family:var(--sans); font-size:15px; font-weight:600; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:9px; letter-spacing:-0.01em; transition:background .15s,transform .1s }
+    .btn-pay:hover { background:#2d2926 }
+    .btn-pay:active { transform:scale(.99) }
+    .btn-pay:disabled { opacity:.6; cursor:wait }
+    .pay-spin { display:none; width:16px; height:16px; border:2px solid rgba(245,242,238,.3); border-top-color:#f5f2ee; border-radius:50%; animation:spin .7s linear infinite }
+    .btn-pay.loading .pay-spin  { display:block }
+    .btn-pay.loading .pay-label { display:none }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    .btn-cancel { display:block; width:100%; text-align:center; margin-top:9px; font-size:12px; color:var(--muted); cursor:pointer; padding:8px; border-radius:6px; transition:color .15s; background:none; border:none; font-family:var(--sans) }
+    .btn-cancel:hover { color:var(--soft) }
+
+    .test-cards { margin-top:14px; padding:12px; background:#f0f7ff; border:1px solid #d0e4f7; border-radius:8px }
+    .tc-title { font-size:11px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#4a7ebd; font-family:var(--mono); margin-bottom:7px }
+    .tc-row { display:flex; justify-content:space-between; font-size:11px; font-family:var(--mono); color:#5a7ba0; padding:2px 0 }
+    .tc-fill { color:#3a6aad; cursor:pointer; text-decoration:underline; text-decoration-style:dotted }
+    .tc-fill:hover { color:#1a4a8d }
+
+    /* ── SUCCESS ── */
+    .view-success { display:none; padding:48px 32px; text-align:center }
+    .s-icon { width:72px; height:72px; background:var(--green-bg); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:32px; margin:0 auto 20px; animation:pop .4s cubic-bezier(.34,1.56,.64,1) }
+    @keyframes pop { from{transform:scale(0);opacity:0} to{transform:scale(1);opacity:1} }
+    .s-title { font-size:24px; font-weight:700; letter-spacing:-0.02em; margin-bottom:6px }
+    .s-amount { font-size:36px; font-weight:700; color:var(--green); margin:10px 0 8px }
+    .s-sub { font-size:14px; color:var(--soft); line-height:1.6; margin-bottom:20px }
+    .s-ref { display:inline-block; background:#f5f2ee; border:1px solid var(--border); border-radius:6px; padding:7px 16px; font-family:var(--mono); font-size:12px; color:var(--soft); margin-bottom:24px }
+    .btn-return { padding:12px 28px; background:var(--text); color:#f5f2ee; border-radius:8px; border:none; cursor:pointer; font-size:14px; font-weight:600; font-family:var(--sans); transition:background .15s }
+    .btn-return:hover { background:#2d2926 }
+
+    /* ── DECLINE TOAST ── */
+    .decline-toast { position:fixed; bottom:28px; left:50%; transform:translateX(-50%); background:var(--red-bg); color:var(--red); border:1px solid #f0c0b8; padding:14px 24px; border-radius:10px; font-size:14px; text-align:center; z-index:99999; box-shadow:0 8px 32px rgba(0,0,0,.1); opacity:0; transition:opacity .25s; pointer-events:none }
+    .decline-toast.show { opacity:1 }
+
+    /* ── LOADING / ERROR ── */
+    .skeleton { background:linear-gradient(90deg,#f0ede8 25%,#e4dfd8 50%,#f0ede8 75%); background-size:200% 100%; animation:shimmer 1.4s infinite; border-radius:5px }
+    @keyframes shimmer { to{background-position:-200% 0} }
+    .view-loading { padding:40px 32px; text-align:center }
+    .view-loading p { font-size:12px; color:var(--muted); margin-top:14px; font-family:var(--mono) }
+    .view-error { display:none; padding:48px 32px; text-align:center }
+
+    footer { text-align:center; padding:22px; font-size:12px; color:var(--muted); font-family:var(--mono) }
+  </style>
+</head>
+<body>
+
+<div class="demo-bar">⚡ EmbedPay Demo · Test card: <strong>4084 0841 2345 6789</strong> · exp 12/28 · cvv 123</div>
+
+<header>
+  <div class="brand"><div class="brand-mark">EP</div>EmbedPay</div>
+  <div class="secure-tag">🔒 256-bit SSL</div>
+</header>
+
+<main>
+  <div class="card">
+
+    <!-- LOADING -->
+    <div id="view-loading" class="view-loading">
+      <div class="skeleton" style="height:18px;width:55%;margin:0 auto 14px"></div>
+      <div class="skeleton" style="height:50px;width:72%;margin:0 auto 10px"></div>
+      <div class="skeleton" style="height:13px;width:45%;margin:0 auto"></div>
+      <p>Loading secure session…</p>
+    </div>
+
+    <!-- ERROR -->
+    <div id="view-error" class="view-error">
+      <div style="font-size:40px;margin-bottom:16px">⚠️</div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px" id="err-title">Session Error</div>
+      <div style="font-size:13px;color:var(--soft);line-height:1.6;margin-bottom:24px" id="err-msg"></div>
+      <button class="btn-return" onclick="history.back()">← Go Back</button>
+    </div>
+
+    <!-- CHECKOUT -->
+    <div id="view-checkout" style="display:none">
+
+      <!-- Dynamic order summary -->
+      <div class="summary">
+        <div class="merchant-row">
+          <div class="avatar" id="merchant-avatar">🏪</div>
+          <div>
+            <div class="m-name" id="merchant-name">Loading…</div>
+            <div class="m-ref"  id="merchant-ref">ref: …</div>
+          </div>
+        </div>
+
+        <div class="amount-block">
+          <div class="amt-label">Amount Due</div>
+          <div class="amt-figure">
+            <span class="amt-sym" id="amt-sym">₦</span><span id="amt-val">—</span>
+          </div>
+          <div class="amt-desc" id="amt-desc"></div>
+        </div>
+
+        <!-- Cart breakdown toggle (only shown for cart orders) -->
+        <button class="breakdown-toggle" id="breakdown-toggle" style="display:none" onclick="toggleBreakdown()">
+          <span>View order breakdown</span> <span class="arrow">▾</span>
+        </button>
+
+        <div class="breakdown" id="breakdown">
+          <div class="breakdown-inner" id="breakdown-inner"></div>
+        </div>
+      </div>
+
+      <!-- Payment form -->
+      <div class="form-area" id="form-area">
+
+        <div class="timer-row">
+          <div class="tdot" id="tdot"></div>
+          <span id="ttext">Session valid for 30:00</span>
+        </div>
+
+        <div class="field-label-section">Card Details</div>
+
+        <div class="fg" style="position:relative">
+          <label class="fl">Card Number</label>
+          <input id="f-card" class="fi" type="text" placeholder="1234 5678 9012 3456" maxlength="19" autocomplete="cc-number" style="padding-right:78px" />
+          <div class="card-icons"><div class="ci ci-v">VISA</div><div class="ci ci-m">MC</div></div>
+          <div class="ferr">Enter a valid 16-digit card number</div>
+        </div>
+
+        <div class="frow">
+          <div class="fg">
+            <label class="fl">Expiry</label>
+            <input id="f-exp" class="fi" type="text" placeholder="MM / YY" maxlength="7" autocomplete="cc-exp" />
+            <div class="ferr">Invalid expiry</div>
+          </div>
+          <div class="fg">
+            <label class="fl">CVV</label>
+            <input id="f-cvv" class="fi" type="text" placeholder="123" maxlength="4" autocomplete="cc-csc" />
+            <div class="ferr">Invalid CVV</div>
+          </div>
+        </div>
+
+        <div class="fg">
+          <label class="fl">Email Address</label>
+          <input id="f-email" class="fi" type="email" placeholder="you@example.com" autocomplete="email" />
+          <div class="ferr">Enter a valid email address</div>
+        </div>
+
+        <div class="test-cards">
+          <div class="tc-title">🧪 Test Cards</div>
+          <div class="tc-row"><span>Success</span><span class="tc-fill" onclick="fillCard('ok')">4084 0841 2345 6789 · 12/28 · 123</span></div>
+          <div class="tc-row"><span>Declined</span><span class="tc-fill" onclick="fillCard('fail')">4000 0000 0000 0002 · 12/28 · 456</span></div>
+        </div>
+
+        <hr class="sep" />
+
+        <div class="order-meta" id="order-meta"></div>
+
+        <button class="btn-pay" id="pay-btn">
+          <div class="pay-spin"></div>
+          <span class="pay-label" id="pay-label">Pay ₦—</span>
+        </button>
+
+        <button class="btn-cancel" id="cancel-btn">← Cancel and return to store</button>
+      </div>
+
+      <!-- Success -->
+      <div class="view-success" id="view-success">
+        <div class="s-icon">✓</div>
+        <div class="s-title">Payment Successful!</div>
+        <div class="s-amount" id="s-amount"></div>
+        <div class="s-sub">Payment confirmed.<br/>Receipt sent to <strong id="s-email"></strong></div>
+        <br/>
+        <div class="s-ref" id="s-ref"></div>
+        <br/><br/>
+        <button class="btn-return" id="btn-return">Return to Store</button>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<div class="decline-toast" id="decline-toast">
+  <strong>Card Declined</strong><br/><span style="font-size:12px">Please try a different card or contact your bank.</span>
+</div>
+
+<footer>Secured by EmbedPay · <span id="footer-merchant"></span></footer>
+
+<script>
+  const $ = id => document.getElementById(id);
+  const SYM = { NGN:"₦", USD:"$", GHS:"₵", KES:"KSh", ZAR:"R" };
+
+  function fmtN(n, currency) {
+    // n is in Naira (not kobo). No multiplication needed.
+    return (SYM[currency] || currency) + Number(n).toLocaleString("en-NG");
+  }
+
+  // ── Load session ─────────────────────────────────────────────
+  const sid = new URLSearchParams(window.location.search).get("session");
+  let session = null, timerInt = null;
+
+  (function load() {
+    if (!sid) { showErr("No session found.", "Return to the store and try again."); return; }
+    const raw = sessionStorage.getItem("ep_session_" + sid);
+    if (!raw)  { showErr("Session not found.", "This link has expired. Please return to the store and try again."); return; }
+    session = JSON.parse(raw);
+    if (session.status === "success") { renderSuccess(); return; }
+    renderCheckout();
+  })();
+
+  function showErr(title, msg) {
+    $("view-loading").style.display = "none";
+    $("err-title").textContent = title;
+    $("err-msg").textContent   = msg;
+    $("view-error").style.display = "block";
+  }
+
+  // ── Render checkout ───────────────────────────────────────────
+  function renderCheckout() {
+    $("view-loading").style.display = "none";
+    $("view-checkout").style.display = "block";
+
+    const currency = session.currency || "NGN";
+    const sym      = SYM[currency] || currency;
+
+    // Merchant info
+    $("merchant-name").textContent = session.merchant_name || "Merchant";
+    $("merchant-ref").textContent  = "ref: " + (session.ref || sid);
+    $("footer-merchant").textContent = session.merchant_name || "";
+    if (session.merchant_logo) $("merchant-avatar").innerHTML = `<img src="${session.merchant_logo}" alt="logo" />`;
+
+    // Amount (stored as Naira, display directly)
+    $("amt-sym").textContent = sym;
+    $("amt-val").textContent = Number(session.totalNaira).toLocaleString("en-NG");
+    if (session.description) $("amt-desc").textContent = session.description;
+
+    // Pay button label
+    $("pay-label").textContent = "Pay " + fmtN(session.totalNaira, currency);
+
+    // Pre-fill email
+    if (session.email) $("f-email").value = session.email;
+
+    // Cart breakdown (only for cart orders)
+    if (session.cartItems && session.cartItems.length > 0) {
+      $("breakdown-toggle").style.display = "flex";
+      buildBreakdown(session, currency, sym);
+    }
+
+    // Order meta block
+    const rows = [
+      ["amount",   fmtN(session.totalNaira, currency)],
+      ["ref",      session.ref || "—"],
+      ...(session.description ? [["for", session.description]] : []),
+      ...(session.customer_name ? [["name", session.customer_name]] : []),
+    ];
+    $("order-meta").innerHTML = rows.map(([k,v]) =>
+      `<div class="mr"><span class="mk">${k}</span><span class="mv">${v}</span></div>`
+    ).join("");
+
+    startTimer();
+
+    $("cancel-btn").addEventListener("click", () => {
+      const dest = session.cancel_url;
+      if (dest && dest !== window.location.href) window.location.href = dest;
+      else history.back();
+    });
+  }
+
+  // ── Cart breakdown ────────────────────────────────────────────
+  function buildBreakdown(s, currency, sym) {
+    const items    = s.cartItems;
+    const itemsHtml = items.map(item => `
+      <div class="b-item">
+        <div>
+          <div class="b-item-name">${item.description}</div>
+          <div class="b-item-detail">${fmtN(item.unitPrice, currency)} × ${item.qty}</div>
+        </div>
+        <div class="b-item-price">${fmtN(item.lineTotal, currency)}</div>
+      </div>
+    `).join("");
+
+    const feesHtml = [
+      s.shippingNaira > 0 ? `<div class="b-fee-row"><span>Shipping</span><span>${fmtN(s.shippingNaira, currency)}</span></div>` : "",
+      s.taxNaira      > 0 ? `<div class="b-fee-row"><span>Tax / VAT</span><span>${fmtN(s.taxNaira, currency)}</span></div>` : "",
+    ].join("");
+
+    $("breakdown-inner").innerHTML = `
+      ${itemsHtml}
+      ${feesHtml ? `<hr class="b-sep" />${feesHtml}` : ""}
+    `;
+  }
+
+  function toggleBreakdown() {
+    const btn = $("breakdown-toggle");
+    const box = $("breakdown");
+    const isOpen = box.classList.toggle("open");
+    btn.classList.toggle("open", isOpen);
+    btn.querySelector("span:first-child").textContent = isOpen ? "Hide breakdown" : "View order breakdown";
+  }
+
+  // ── Timer ─────────────────────────────────────────────────────
+  function startTimer() {
+    const exp = new Date(session.expires_at).getTime();
+    function tick() {
+      const left = exp - Date.now();
+      if (left <= 0) {
+        clearInterval(timerInt);
+        $("ttext").textContent = "Session expired — please start over";
+        $("tdot").className    = "tdot dead";
+        $("pay-btn").disabled  = true;
+        return;
+      }
+      const m = Math.floor(left / 60000);
+      const s = Math.floor((left % 60000) / 1000);
+      $("ttext").textContent = `Session expires in ${m}:${s.toString().padStart(2,"0")}`;
+      $("tdot").className    = left < 5*60000 ? "tdot warn" : "tdot";
+    }
+    tick(); timerInt = setInterval(tick, 1000);
+  }
+
+  // ── Input formatting ──────────────────────────────────────────
+  $("f-card").addEventListener("input", function() {
+    let v = this.value.replace(/\D/g,"").substr(0,16);
+    this.value = v.replace(/(.{4})/g,"$1 ").trim();
+    this.classList.remove("err");
+  });
+  $("f-exp").addEventListener("input", function() {
+    let v = this.value.replace(/\D/g,"").substr(0,4);
+    if (v.length > 2) v = v.substr(0,2) + " / " + v.substr(2);
+    this.value = v; this.classList.remove("err");
+  });
+  $("f-cvv").addEventListener("input",   function() { this.value = this.value.replace(/\D/g,"").substr(0,4); this.classList.remove("err"); });
+  $("f-email").addEventListener("input", function() { this.classList.remove("err"); });
+
+  function fillCard(type) {
+    $("f-card").value = type==="ok" ? "4084 0841 2345 6789" : "4000 0000 0000 0002";
+    $("f-exp").value  = "12 / 28";
+    $("f-cvv").value  = type==="ok" ? "123" : "456";
+    [$("f-card"),$("f-exp"),$("f-cvv")].forEach(el => el.classList.remove("err"));
+  }
+
+  function validate() {
+    let ok = true;
+    if ($("f-card").value.replace(/\s/g,"").length < 16)   { $("f-card").classList.add("err"); ok=false; }
+    if ($("f-exp").value.replace(/[\s/]/g,"").length < 4)  { $("f-exp").classList.add("err");  ok=false; }
+    if ($("f-cvv").value.length < 3)                       { $("f-cvv").classList.add("err");  ok=false; }
+    const em = $("f-email").value;
+    if (!em.includes("@")||!em.includes("."))               { $("f-email").classList.add("err"); ok=false; }
+    return ok;
+  }
+
+  // ── Payment ───────────────────────────────────────────────────
+  $("pay-btn").addEventListener("click", async function() {
+    if (!validate()) return;
+    const btn = this;
+    btn.classList.add("loading"); btn.disabled = true;
+    await new Promise(r => setTimeout(r, 1800));
+
+    if ($("f-card").value.replace(/\s/g,"") === "4000000000000002") {
+      btn.classList.remove("loading"); btn.disabled = false;
+      const dt = $("decline-toast");
+      dt.classList.add("show");
+      setTimeout(() => dt.classList.remove("show"), 5000);
+      return;
+    }
+
+    clearInterval(timerInt);
+    session.status      = "success";
+    session.paid_at     = new Date().toISOString();
+    session.payer_email = $("f-email").value;
+    sessionStorage.setItem("ep_session_" + sid, JSON.stringify(session));
+    btn.classList.remove("loading"); btn.disabled = false;
+    $("form-area").style.display = "none";
+    renderSuccess();
+  });
+
+  // ── Success ───────────────────────────────────────────────────
+  function renderSuccess() {
+    $("view-loading").style.display  = "none";
+    $("view-checkout").style.display = "block";
+    if ($("form-area")) $("form-area").style.display = "none";
+    $("view-success").style.display  = "block";
+
+    const currency = session.currency || "NGN";
+    const email    = session.payer_email || session.email || "";
+
+    $("s-amount").textContent = fmtN(session.totalNaira, currency);
+    $("s-email").textContent  = email;
+    $("s-ref").textContent    = "REF: " + (session.ref || sid);
+
+    $("btn-return").addEventListener("click", () => {
+      const dest = session.callback_url;
+      if (dest && dest !== window.location.href) window.location.href = dest;
+      else history.back();
+    });
+  }
+</script>
+
+</body>
+</html>
