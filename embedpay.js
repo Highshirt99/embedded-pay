@@ -120,7 +120,7 @@
         "https://api.alexpay.com/v1/embed/session",
         {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json" , "x-forwarded-for": "127.0.0.1"},
           body: JSON.stringify(payload),
         }
       );
